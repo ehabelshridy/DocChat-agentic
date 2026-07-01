@@ -120,8 +120,8 @@ docchat-agentic/
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/ehabelshridy/docchat-agentic.git
-cd docchat-agentic
+git clone https://github.com/ehabelshridy/DocChat-agentic.git
+cd DocChat-agentic
 
 python -m venv venv
 # Windows:  venv\Scripts\activate
@@ -132,8 +132,7 @@ pip install -r requirements.txt
 
 ### 2. Configure environment
 
-```bash
-cp .env.example .env
+```
 # Open .env and set HF_TOKEN=hf_xxxxxxxxxxxxxxxxxx
 ```
 
@@ -247,4 +246,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 **Ehab El-Shridy** — AI Developer specializing in Agentic AI and RAG systems.
 
-[![GitHub](https://img.shields.io/badge/GitHub-ehabelshridy-black?logo=github)](https://github.com/ehabelshridy/agentic-rag)
+
