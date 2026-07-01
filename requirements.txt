@@ -1,0 +1,31 @@
+# DocChat backend dependencies
+# Install with: pip install -r requirements.txt
+
+# Document fetching (fetch_fda_labels.py)
+requests>=2.31.0
+tqdm>=4.66.0
+
+# Document parsing & chunking
+docling>=2.0.0
+
+# Vector database
+chromadb>=0.5.0
+
+# Keyword search
+rank_bm25>=0.2.2
+
+# LangGraph orchestration
+langgraph>=0.2.0
+
+# API layer
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+
+# HuggingFace Inference API (embeddings + LLM)
+huggingface_hub>=0.24.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Data validation
+pydantic>=2.0.0

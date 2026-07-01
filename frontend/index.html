@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocChat — Verified Document Q&amp;A</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">DC</span>
+      <div class="brand-text">
+        <span class="brand-name">DocChat</span>
+        <span class="brand-sub">Verified retrieval over your documents</span>
+      </div>
+    </div>
+    <div class="topbar-status" id="connectionStatus">
+      <span class="dot" id="connectionDot"></span>
+      <span id="connectionLabel">Checking backend…</span>
+    </div>
+  </header>
+
+  <main class="chat-area" id="chatArea">
+    <div class="empty-state" id="emptyState">
+      <p class="empty-eyebrow">No questions asked yet</p>
+      <h1>Ask something the documents can actually answer.</h1>
+      <p class="empty-body">
+        Every answer below will show its own verification trail —
+        whether the retrieval was relevant, whether the answer is
+        grounded in the source text, and how many retries it took to
+        get there. If the system can't verify an answer, it will say so
+        instead of guessing.
+      </p>
+    </div>
+  </main>
+
+  <footer class="composer">
+    <form id="chatForm" class="composer-form">
+      <textarea
+        id="questionInput"
+        class="composer-input"
+        placeholder="Ask a question about the loaded documents…"
+        rows="1"
+        maxlength="2000"
+      ></textarea>
+      <button type="submit" class="composer-send" id="sendButton" aria-label="Send question">
+        <span class="send-label">Ask</span>
+      </button>
+    </form>
+    <p class="composer-hint">Enter to send · Shift+Enter for a new line</p>
+  </footer>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
