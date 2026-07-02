@@ -14,6 +14,8 @@
 
 DocChat is a production-style **Corrective Agentic RAG** system built on [LangGraph](https://github.com/langchain-ai/langgraph). It answers clinical questions exclusively from indexed FDA drug-label documents — refusing to hallucinate or answer outside its knowledge base — and shows users a live verification trail (relevance status, groundedness status, retry count, source citations) for every response.
 
+![Demo](/demo.gif)
+
 The project was built as a portfolio piece demonstrating:
 - **Agentic pipeline design** with conditional edges and self-correcting loops
 - **Hybrid retrieval** (BM25 keyword + ChromaDB semantic + RRF fusion)
