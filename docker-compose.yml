@@ -1,0 +1,48 @@
+services:
+
+  # ── Ingest (one-shot, runs once then exits) ───────────────────────────────
+  # Fetches FDA labels and builds the ChromaDB + BM25 indexes.
+  # Run manually before starting the app:
+  #   docker compose run --rm ingest
+  ingest:
+    build: .
+    image: docchat:latest
+    env_file: .env
+    volumes:
+      - chroma_data:/app/chroma_db
+      - raw_labels:/app/data/raw_labels
+    working_dir: /app
+    entrypoint: []
+    command: >
+      sh -c "
+        echo '=== Step 1: Fetching FDA labels ===' &&
+        python scripts/fetch_fda_labels.py --limit 100 --out /app/data/raw_labels &&
+        echo '=== Step 2: Building indexes ===' &&
+        python scripts/ingest_pipeline.py
+              --input-dir /app/data/raw_labels
+              --chroma-dir /app/chroma_db
+      "
+    profiles:
+      - ingest
+
+  # ── App (long-running) ────────────────────────────────────────────────────
+  app:
+    build: .
+    image: docchat:latest
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/app/chroma_db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  chroma_data:
+  raw_labels:

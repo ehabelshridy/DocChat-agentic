@@ -7,15 +7,12 @@
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-green)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-teal)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
-![Demo](DocChat.gif)
 
 ---
 
 ## Overview
 
 DocChat is a production-style **Corrective Agentic RAG** system built on [LangGraph](https://github.com/langchain-ai/langgraph). It answers clinical questions exclusively from indexed FDA drug-label documents — refusing to hallucinate or answer outside its knowledge base — and shows users a live verification trail (relevance status, groundedness status, retry count, source citations) for every response.
-
-
 
 The project was built as a portfolio piece demonstrating:
 - **Agentic pipeline design** with conditional edges and self-correcting loops
@@ -123,8 +120,8 @@ docchat-agentic/
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/ehabelshridy/DocChat-agentic.git
-cd DocChat-agentic
+git clone https://github.com/ehabelshridy/docchat-agentic.git
+cd docchat-agentic
 
 python -m venv venv
 # Windows:  venv\Scripts\activate
@@ -135,7 +132,8 @@ pip install -r requirements.txt
 
 ### 2. Configure environment
 
-```
+```bash
+cp .env.example .env
 # Open .env and set HF_TOKEN=hf_xxxxxxxxxxxxxxxxxx
 ```
 
@@ -164,7 +162,7 @@ python scripts/ingest_pipeline.py --input-dir data/raw_labels --chroma-dir chrom
 
 > ⚠️ Re-run this command whenever you add new documents or change the chunking/tokenizer logic.
 
-### 4. Run the app
+### 5. Run the app
 
 ```bash
 cd backend
@@ -172,6 +170,55 @@ uvicorn main:app --reload --port 8000
 ```
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000) — the backend serves the frontend directly. One process, one port, no separate static file server.
+
+---
+
+## Running with Docker
+
+A simpler alternative to the manual setup above — no Python environment needed on the host machine.
+
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- A `.env` file with your `HF_TOKEN` (see step 2 above)
+
+### 1. Build the image
+
+```bash
+docker compose build
+```
+
+### 2. Fetch data and build indexes (run once)
+
+```bash
+docker compose run --rm ingest
+```
+
+This fetches 100 FDA drug labels from openFDA and builds the ChromaDB + BM25 indexes inside a Docker volume. Only needs to run once — data persists between container restarts.
+
+### 3. Start the app
+
+```bash
+docker compose up app
+```
+
+Open [http://localhost:8000](http://localhost:8000).
+
+### Useful Docker commands
+
+```bash
+# Run in background
+docker compose up app -d
+
+# View logs
+docker compose logs -f app
+
+# Stop the app
+docker compose down
+
+# Rebuild after code changes
+docker compose build --no-cache
+docker compose up app
+```
 
 ---
 
@@ -249,4 +296,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 **Ehab El-Shridy** — AI Developer specializing in Agentic AI and RAG systems.
 
-
+[![GitHub](https://img.shields.io/badge/GitHub-ehabelshridy-black?logo=github)](https://github.com/ehabelshridy/agentic-rag)
