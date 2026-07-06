@@ -32,9 +32,8 @@ BM25_STOPWORDS = frozenset({
     "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does",
     "for", "from", "had", "has", "have", "how", "i", "if", "in", "into",
     "is", "it", "its", "may", "of", "on", "or", "should", "that", "the",
-    "their", "there", "these", "this", "to", "use", "used", "uses",
-    "using", "was", "were", "what", "when", "where", "which", "who",
-    "will", "with", "you", "your",
+    "their", "there", "these", "this", "to", "was", "were", "what",
+    "when", "where", "which", "who", "will", "with", "you", "your",
 })
 
 
@@ -56,8 +55,7 @@ class HybridRetriever:
     ingest_pipeline.py and answers queries with RRF-fused results."""
 
     # Project root = parent of the backend/ folder where this file lives.
-    # Using an absolute path here means the indexes are always found
-    # regardless of which directory uvicorn is launched from.
+    # chroma_db/ sits at the project root, not inside backend/.
     _PROJECT_ROOT = Path(__file__).resolve().parent.parent
     _DEFAULT_CHROMA = str(_PROJECT_ROOT / "chroma_db")
     _DEFAULT_BM25   = str(_PROJECT_ROOT / "chroma_db" / "bm25_index.pkl")

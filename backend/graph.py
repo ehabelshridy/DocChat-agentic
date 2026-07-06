@@ -182,12 +182,11 @@ def check_groundedness_node(state: GraphState) -> GraphState:
     context = "\n\n---\n\n".join(c["text"] for c in state["relevant_chunks"])
     user_prompt = f"Document excerpts:\n{context}\n\nGenerated answer:\n{state['answer']}"
 
-    # temperature=0 for the same reason as grade_relevance_node: a
-    # binary grounded/not-grounded verdict should not vary across
-    # identical inputs.
     raw = chat_completion(GROUNDEDNESS_SYSTEM_PROMPT, user_prompt, max_tokens=150, temperature=0.0)
+    print(f"\n[GROUNDEDNESS] attempt={state['generation_retry_count']+1} raw={raw!r}\n")
     parsed = parse_json_response(raw)
     is_grounded = bool(parsed.get("is_grounded", parsed.get("decision", False)))
+    print(f"[GROUNDEDNESS] is_grounded={is_grounded}\n")
 
     updated = {**state, "is_grounded": is_grounded}
     if is_grounded:
