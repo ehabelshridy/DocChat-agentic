@@ -1,0 +1,33 @@
+# Git
+.git/
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Secrets (never bake into the image)
+.env
+
+# Generated data (mounted as Docker volumes at runtime)
+chroma_db/
+data/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Docs (not needed inside the image)
+README.md
+LICENSE
