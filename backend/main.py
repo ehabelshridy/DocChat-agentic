@@ -10,15 +10,37 @@ Run with:
     uvicorn main:app --reload --port 8000
 
 Then open http://127.0.0.1:8000 in a browser.
+
+Prompt Caching visibility
+-------------------------
+Set LOG_LEVEL=DEBUG in your .env (or shell) to see per-call cache
+stats in the terminal:
+
+    LOG_LEVEL=DEBUG uvicorn main:app --reload --port 8000
+
+You will see lines like:
+    DEBUG llm: Prompt cache HIT: 1024/1187 input tokens served from cache (saved ~50% on those tokens).
+    DEBUG llm: Prompt cache MISS: 1187 input tokens (prefix will be cached for subsequent identical calls).
 """
 
+import logging
+import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from graph import run_query
+
+load_dotenv()
+
+# Configure logging — DEBUG shows prompt cache hits from llm.py
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(levelname)s %(name)s: %(message)s",
+)
 
 app = FastAPI(title="DocChat API", version="1.0.0")
 

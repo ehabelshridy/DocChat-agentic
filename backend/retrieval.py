@@ -15,9 +15,7 @@ from typing import List, TypedDict
 import chromadb
 from chromadb.config import Settings
 
-from llm import embed_query
-
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+from llm import embed_query, EMBEDDING_MODEL_NAME
 
 # Common English words that carry almost no distinguishing signal for
 # BM25 in this domain. Without filtering these, a question like "what
@@ -32,8 +30,9 @@ BM25_STOPWORDS = frozenset({
     "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does",
     "for", "from", "had", "has", "have", "how", "i", "if", "in", "into",
     "is", "it", "its", "may", "of", "on", "or", "should", "that", "the",
-    "their", "there", "these", "this", "to", "was", "were", "what",
-    "when", "where", "which", "who", "will", "with", "you", "your",
+    "their", "there", "these", "this", "to", "use", "used", "uses",
+    "using", "was", "were", "what", "when", "where", "which", "who",
+    "will", "with", "you", "your",
 })
 
 
