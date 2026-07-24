@@ -12,8 +12,7 @@ Data engineering pipeline for the DocChat project:
 
 The two indexes share the same chunk IDs, so a downstream retriever can
 run both searches and merge the results with Reciprocal Rank Fusion
-(RRF) to get hybrid retrieval. This script only builds the indexes;
-see test_hybrid_retrieval.py for a runnable example that queries them.
+(RRF) to get hybrid retrieval. This script only builds the indexes.
 
 Why Docling here (and not a plain text loader):
 - Docling parses structure (headers, tables, lists) instead of treating
@@ -23,28 +22,23 @@ Why Docling here (and not a plain text loader):
   impairment patients?" by retrieving the Dosage section specifically,
   not a random 500-character window.
 - Docling also reads PDFs, scanned PDFs (via OCR), Word docs, HTML, and
-  PowerPoint with the same API. The pipeline below converts every
-  format the same way and chunking happens after conversion, so swapping
-  .txt sources for real PDFs (DailyMed SPL PDFs) requires zero changes.
+  PowerPoint with the same API.
 
 Embeddings:
-- Generated via HuggingFace's hosted Inference API (InferenceClient),
-  the same way the rest of the DocChat / Recruitment Agent projects
-  call HF models -- no local model download, no GPU needed. Requires
-  a free HF_TOKEN with "Make calls to Inference Providers" permission,
-  loaded from a .env file via python-dotenv.
+- Generated via OpenAI's Embeddings API (text-embedding-3-small).
+- Chunking uses a tiktoken-based tokenizer (cl100k_base) so chunk sizes
+  are calibrated to the same encoding used by gpt-4o-mini and
+  text-embedding-3-small -- no HuggingFace dependency anywhere.
 
 Usage:
-    pip install docling chromadb huggingface_hub python-dotenv rank_bm25
+    pip install -r requirements.txt
 
-    # .env file in the same directory:
-    #   HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    # .env file in the project root:
+    #   OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-    python ingest_pipeline.py \
-        --input-dir ./data/raw_labels \
-        --chroma-dir ./chroma_db \
-        --bm25-path ./chroma_db/bm25_index.pkl \
-        --collection drug_labels
+    python scripts/ingest_pipeline.py \
+        --input-dir data/raw_labels \
+        --chroma-dir chroma_db
 """
 
 import argparse
@@ -63,14 +57,19 @@ from docling.document_converter import DocumentConverter
 from docling.chunking import HybridChunker
 from rank_bm25 import BM25Okapi
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
+from openai import OpenAI
 
 # Formats Docling can natively read. Anything else is skipped with a warning.
 SUPPORTED_SUFFIXES = {".txt", ".md", ".pdf", ".docx", ".html", ".htm", ".pptx"}
 
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output dimension; used for the Docling tokenizer fallback
-EMBEDDING_BATCH_SIZE = 32  # chunks per HF Inference API call
+EMBEDDING_MODEL_NAME  = "text-embedding-3-small"   # OpenAI model used for embeddings
+EMBEDDING_DIM         = 1536   # text-embedding-3-small output dimension
+EMBEDDING_BATCH_SIZE  = 100    # OpenAI allows up to 2048 inputs per request
+
+# Maximum tokens per chunk fed to the embedding model.
+# text-embedding-3-small supports up to 8191 tokens; we use 512 to keep
+# chunks focused and retrieval precise.
+CHUNK_MAX_TOKENS = 512
 
 
 @dataclass
@@ -91,6 +90,37 @@ class Chunk:
 # Note "use"/"uses"/"used"/"using" are deliberately KEPT (not treated
 # as stopwords) because "Uses" is a real FDA label section heading
 # (e.g. on OTC products like Betadine) and a meaningful query term.
+from docling_core.transforms.chunker.tokenizer.base import BaseTokenizer as DoclingBaseTokenizer
+
+
+class TiktokenTokenizer(DoclingBaseTokenizer):
+    """Docling-compatible tokenizer backed by tiktoken (OpenAI's tokenizer).
+
+    Docling's HybridChunker requires a tokenizer that implements
+    count_tokens() and get_max_tokens() to decide where to split chunks.
+    This class wraps tiktoken so we can use it without any HuggingFace
+    dependency.
+
+    We use the 'cl100k_base' encoding which is the same encoding used by
+    gpt-4o-mini and text-embedding-3-small, so chunk sizes are calibrated
+    to the actual models we use.
+    """
+    max_tokens: int = CHUNK_MAX_TOKENS
+
+    def model_post_init(self, __context) -> None:
+        import tiktoken
+        object.__setattr__(self, "_enc", tiktoken.get_encoding("cl100k_base"))
+
+    def count_tokens(self, text: str) -> int:
+        return len(self._enc.encode(text))
+
+    def get_max_tokens(self) -> int:
+        return self.max_tokens
+
+    def get_tokenizer(self):
+        return self._enc
+
+
 BM25_STOPWORDS = frozenset({
     "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does",
     "for", "from", "had", "has", "have", "how", "i", "if", "in", "into",
@@ -185,38 +215,31 @@ def convert_and_chunk(filepath: Path, converter: DocumentConverter, chunker: Hyb
     return chunks
 
 
-def get_hf_client() -> InferenceClient:
-    """Load HF_TOKEN from .env and return a ready InferenceClient.
-
-    Fails fast with a clear message if the token is missing, since a
-    silent failure here would otherwise surface as a confusing 401
-    deep inside huggingface_hub.
-    """
+def get_openai_client() -> OpenAI:
+    """Load OPENAI_API_KEY from .env and return a ready OpenAI client."""
     load_dotenv()
-    hf_token = os.getenv("HF_TOKEN")
-    if not hf_token:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
         print(
-            "ERROR: HF_TOKEN not found. Create a .env file in this directory with:\n"
-            "  HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n"
-            "Get a free token at https://huggingface.co/settings/tokens "
-            "(make sure 'Make calls to Inference Providers' is enabled)."
+            "ERROR: OPENAI_API_KEY not found. Create a .env file with:\n"
+            "  OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n"
+            "Get a key at https://platform.openai.com/api-keys"
         )
         sys.exit(1)
-    return InferenceClient(token=hf_token)
+    return OpenAI(api_key=api_key)
 
 
 def embed_texts(
-    client: InferenceClient,
+    client: OpenAI,
     texts: List[str],
     model_name: str,
     batch_size: int = EMBEDDING_BATCH_SIZE,
     max_retries: int = 3,
 ) -> List[List[float]]:
-    """Embed a list of texts via HF Inference API, in batches.
+    """Embed a list of texts via OpenAI Embeddings API, in batches.
 
-    Batching matters here for two reasons: it's far fewer HTTP round
-    trips than one-request-per-chunk, and it stays comfortably under
-    the free tier's rate limits for a few hundred chunks.
+    OpenAI allows up to 2048 inputs per request, so batch_size=100
+    keeps us well within limits while minimising round trips.
     """
     all_embeddings: List[List[float]] = []
     total_batches = (len(texts) + batch_size - 1) // batch_size
@@ -227,9 +250,9 @@ def embed_texts(
 
         for attempt in range(1, max_retries + 1):
             try:
-                result = client.feature_extraction(batch, model=model_name)
-                # result is a numpy array of shape (len(batch), dim)
-                all_embeddings.extend(result.tolist())
+                response = client.embeddings.create(model=model_name, input=batch)
+                # response.data is ordered to match the input list
+                all_embeddings.extend([item.embedding for item in response.data])
                 break
             except Exception as e:
                 if attempt == max_retries:
@@ -264,14 +287,9 @@ def build_indexes(
 
     print("Loading Docling converter + HybridChunker ...")
     converter = DocumentConverter()
-    # HybridChunker needs a tokenizer to know how many tokens fit per
-    # chunk; we point it at the same model we'll use for embeddings so
-    # chunk sizes are calibrated to that model's actual context window.
-    # NOTE: this downloads the (free, public) tokenizer config from
-    # HuggingFace on first run and caches it locally -- it does NOT use
-    # HF_TOKEN or call the Inference API; that happens only when we
-    # actually embed the chunks below.
-    chunker = HybridChunker(tokenizer=embedding_model_name, max_tokens=256)
+    # TiktokenTokenizer wraps OpenAI's tiktoken library so HybridChunker
+    # can count tokens and split chunks without any HuggingFace dependency.
+    chunker = HybridChunker(tokenizer=TiktokenTokenizer(), max_tokens=CHUNK_MAX_TOKENS)
 
     all_chunks: List[Chunk] = []
     for filepath in files:
@@ -291,12 +309,12 @@ def build_indexes(
     print(f"\nTotal chunks across all documents: {len(all_chunks)}")
 
     # --- Embeddings (via HF Inference API) + ChromaDB (dense / semantic index) ---
-    print(f"\nConnecting to HF Inference API for model: {embedding_model_name} ...")
-    hf_client = get_hf_client()
+    print(f"\nConnecting to OpenAI API for model: {embedding_model_name} ...")
+    openai_client = get_openai_client()
 
-    print("Computing embeddings via HF Inference API ...")
+    print("Computing embeddings via OpenAI Embeddings API ...")
     texts = [c.text for c in all_chunks]
-    embeddings = embed_texts(hf_client, texts, embedding_model_name)
+    embeddings = embed_texts(openai_client, texts, embedding_model_name)
 
     print(f"\nWriting to ChromaDB at {chroma_dir} (collection: {collection_name}) ...")
     client = chromadb.PersistentClient(path=chroma_dir, settings=Settings(anonymized_telemetry=False))
@@ -354,18 +372,12 @@ def build_indexes(
 
 
 def main():
-    # Project root = two levels up from scripts/ingest_pipeline.py
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    _DEFAULT_INPUT  = str(_PROJECT_ROOT / "data" / "raw_labels")
-    _DEFAULT_CHROMA = str(_PROJECT_ROOT / "chroma_db")
-    _DEFAULT_BM25   = str(_PROJECT_ROOT / "chroma_db" / "bm25_index.pkl")
-
     parser = argparse.ArgumentParser(description="Docling -> Chunk -> Embed -> ChromaDB + BM25 ingestion pipeline")
-    parser.add_argument("--input-dir", default=_DEFAULT_INPUT,  help="Directory of source documents")
-    parser.add_argument("--chroma-dir", default=_DEFAULT_CHROMA, help="ChromaDB persistent storage directory")
-    parser.add_argument("--bm25-path",  default=_DEFAULT_BM25,   help="Path to save the BM25 pickle")
+    parser.add_argument("--input-dir", default="./data/raw_labels", help="Directory of source documents")
+    parser.add_argument("--chroma-dir", default="./chroma_db", help="ChromaDB persistent storage directory")
+    parser.add_argument("--bm25-path", default="./chroma_db/bm25_index.pkl", help="Path to save the BM25 pickle")
     parser.add_argument("--collection", default="drug_labels", help="ChromaDB collection name")
-    parser.add_argument("--embedding-model", default=EMBEDDING_MODEL_NAME, help="HF model name to call via Inference API")
+    parser.add_argument("--embedding-model", default=EMBEDDING_MODEL_NAME, help="OpenAI embedding model name")
     args = parser.parse_args()
 
     start = time.time()
