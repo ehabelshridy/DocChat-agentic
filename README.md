@@ -70,8 +70,8 @@ User question
 | Layer | Technology |
 |---|---|
 | **Orchestration** | LangGraph `StateGraph` with conditional edges |
-| **LLM** | `Qwen/Qwen2.5-7B-Instruct` via HuggingFace Inference API |
-| **Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` via HF Inference API |
+| **LLM** | `gpt-4o-mini` via OpenAI API |
+| **Embeddings** | `text-embedding-3-small` (1536 dims) via OpenAI API |
 | **Document parsing** | [Docling](https://github.com/DS4SD/docling) (PDF, DOCX, HTML, TXT) |
 | **Chunking** | Docling `HybridChunker` (structure-aware, respects section headings) |
 | **Vector store** | ChromaDB (persistent, local) |
@@ -134,11 +134,10 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Open .env and set HF_TOKEN=hf_xxxxxxxxxxxxxxxxxx
+# Open .env and set OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxx
 ```
 
-Get a free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
-Enable the **"Make calls to Inference Providers"** permission.
+Get a key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
 
 ### 3. Fetch FDA drug labels
 
@@ -179,7 +178,7 @@ A simpler alternative to the manual setup above — no Python environment needed
 
 ### Prerequisites
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
-- A `.env` file with your `HF_TOKEN` (see step 2 above)
+- A `.env` file with your `OPENAI_API_KEY` (see step 2 above)
 
 ### 1. Build the image
 
@@ -219,6 +218,67 @@ docker compose down
 docker compose build --no-cache
 docker compose up app
 ```
+
+---
+
+## Testing
+
+The test suite has three layers — run whichever fits your context.
+
+### Test structure
+
+| File | What it tests | Needs API? | Needs index? | Speed |
+|---|---|---|---|---|
+| `tests/test_unit.py` | Tokenizer, RRF, JSON parsing | No | No | < 1s |
+| `tests/test_pipeline.py` | Graph routing (LLM mocked) | No | No | < 5s |
+| `tests/test_e2e.py` | Full pipeline on real data | Yes | Yes | ~30s |
+
+### Install pytest
+
+```bash
+pip install pytest
+```
+
+### Run unit tests only (fast, free, no setup needed)
+
+```bash
+pytest tests/test_unit.py -v
+```
+
+### Run unit + integration tests (no API or index required)
+
+```bash
+pytest tests/test_unit.py tests/test_pipeline.py -v
+```
+
+### Run all tests (requires OPENAI_API_KEY in `.env` and indexed `chroma_db/`)
+
+```bash
+pytest tests/ -v
+```
+
+### Run without E2E tests (recommended for CI to avoid API costs)
+
+```bash
+pytest tests/ -v --ignore=tests/test_e2e.py
+```
+
+### Expected output (unit + integration)
+
+```
+tests/test_unit.py::TestTokenizer::test_removes_stopwords        PASSED
+tests/test_unit.py::TestTokenizer::test_keeps_drug_name          PASSED
+tests/test_unit.py::TestTokenizer::test_keeps_use_and_uses       PASSED
+...
+tests/test_pipeline.py::TestHappyPath::test_relevant_and_grounded_on_first_try  PASSED
+tests/test_pipeline.py::TestRelevanceRetryLoop::test_one_relevance_retry_then_success  PASSED
+tests/test_pipeline.py::TestRelevanceRetryLoop::test_max_relevance_retries_triggers_fallback  PASSED
+tests/test_pipeline.py::TestRelevanceRetryLoop::test_mixed_batch_one_relevant_chunk_passes  PASSED
+...
+26 passed in 3.2s
+```
+
+> The E2E tests skip automatically if `OPENAI_API_KEY` or `chroma_db/` are missing — no manual flags needed.
 
 ---
 
